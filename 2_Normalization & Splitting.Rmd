@@ -1,0 +1,92 @@
+---
+title: "2_Normalization & Splitting"
+output: html_document
+date: "2024-01-29"
+---
+
+###### 1. Setting up working directory
+
+```{r, setup, include=FALSE}
+knitr::opts_knit$set(root.dir ="/Users/leynaxoi/Documents/PLO Mice Run 2/Analysis 3" )
+```
+
+
+###### 2. Loading Libraries
+
+```{r}
+list.of.packages <- c("Seurat", "tidyverse","Matrix","scales","cowplot","RCurl","AnnotationHub","rtracklayer","GPseq","ensembldb")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages))
+  install.packages(new.packages)
+for(pkg in c("Seurat", "tidyverse","Matrix","scales","cowplot","RCurl","AnnotationHub","rtracklayer","GPseq","ensembldb")){
+  library(pkg, character.only = TRUE)
+}
+``` 
+
+###### 3. Loading Filtered Data 
+
+```{r}
+load("/Users/leynaxoi/Documents/PLO Mice Run 2/Analysis 3/data/Filtered_PLO_Mice.RData")
+```
+
+###### 4. Normalization 
+
+```{r}
+Norm.Data<- NormalizeData(Subset_PLO)
+```
+
+###### 5.Regressing out unwanted variation
+Results demonstrates we don't need to regress by mitochondrial 
+```{r}
+# Check quartile values
+summary(Norm.Data@meta.data[["ratio.mt"]])
+
+# Turn mitoRatio into categorical factor vector based on quartile values
+Norm.Data@meta.data$mitoFr <- cut(Norm.Data@meta.data[["ratio.mt"]], 
+                   breaks=c(-Inf, 0.0144, 0.0199, 0.0267, Inf), 
+                   labels=c("Low","Medium","Medium high", "High"))
+				
+
+```
+```{r}
+# Identify the most variable genes
+Norm.Data <- FindVariableFeatures(Norm.Data, 
+                     selection.method = "vst",
+                     nfeatures = 2000, 
+                     verbose = FALSE)
+		     
+# Scale the counts
+Norm.Data<- ScaleData(Norm.Data)
+```
+```{r}
+# Perform PCA
+Norm.Data <- RunPCA(Norm.Data)
+```
+```{r}
+# Plot the PCA colored by cell cycle phase
+DimPlot(Norm.Data,
+        reduction = "pca",
+        group.by= "mitoFr",
+        split.by = "mitoFr")
+```
+
+###### 6. Iterating over samples in a dataset
+
+```{r}
+# Split seurat object by condition to perform cell cycle scoring and SCT on all samples
+split_PLO <- SplitObject(Subset_PLO, split.by = "sample")
+```
+```{r}
+options(future.globals.maxSize = 4000 * 1024^2)
+```
+```{r}
+for (i in 1:length(split_PLO)) {
+    split_PLO[[i]] <- SCTransform(split_PLO[[i]], vst.flavor = "v2")
+    }
+```
+```{r}
+saveRDS(split_PLO, "data/split_PLO.rds")
+```
+
+
+

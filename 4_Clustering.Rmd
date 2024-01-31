@@ -1,0 +1,251 @@
+---
+title: 4_Clustering"
+output: html_document
+date: "2024-01-30"
+---
+```{r}
+remotes::install_github("mojaveazure/seurat-object", "seurat5", quiet = TRUE)
+remotes::install_github("satijalab/seurat", "seurat5", quiet = TRUE)
+```
+
+###### 1. Setting up working directory
+
+```{r, setup, include=FALSE}
+knitr::opts_knit$set(root.dir ="/Users/leynaxoi/Documents/PLO Mice Run 2/Analysis 3" )
+```
+
+
+###### 2. Loading Libraries
+
+```{r}
+list.of.packages <- c("Seurat", "tidyverse","Matrix","scales","cowplot","RCurl","AnnotationHub","rtracklayer","GPseq","ensembldb")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages))
+  install.packages(new.packages)
+for(pkg in c("Seurat", "tidyverse","Matrix","scales","cowplot","RCurl","AnnotationHub","rtracklayer","GPseq","ensembldb")){
+  library(pkg, character.only = TRUE)
+}
+``` 
+
+
+###### 3. Load Integrated Data 
+
+```{r}
+seurat_integrated <- readRDS("/Users/leynaxoi/Documents/PLO Mice Run 2/Analysis 3/results/integrated_seurat.rds")
+```
+
+```{r}
+# Visualize the number of cell counts per sample
+# 1. Open jpeg file
+jpeg("figures/Elbow Plots.jpg", width = 1052, height = 640)
+#2. Elbow Plots
+ElbowPlot(object = seurat_integrated, 
+          ndims = 40)
+# 3. Close the file
+dev.off()
+```
+```{r}
+# Determine the K-nearest neighbor graph
+seurat_integrated <- FindNeighbors(object = seurat_integrated, 
+                                dims = 1:40)
+```
+
+```{r}
+# Determine the clusters for various resolutions                                
+seurat_integrated <- FindClusters(object = seurat_integrated,
+                               resolution = c(0.18 ))
+
+```
+
+```{r}
+# Explore resolutions
+seurat_integrated@meta.data %>% 
+        View()
+```
+
+
+```{r eval=FALSE, include=FALSE}
+# Assign identity of clusters
+Idents(object = seurat_integrated) <- "integrated_snn_res.0.06"
+```
+```{r eval=FALSE, include=FALSE}
+# 1. Open jpeg file
+jpeg("figures/TSNE_dim40_res0.06.jpg", width = 1052, height = 640)
+# Plot the UMAP
+# Plot the UMAP
+DimPlot(seurat_integrated,
+        reduction = "umap",
+        label = TRUE,
+        label.size = 6)
+# 3. Close the file
+dev.off()
+```
+```{r eval=FALSE, include=FALSE}
+# Assign identity of clusters
+Idents(object = seurat_integrated) <- "integrated_snn_res.0.54"
+```
+```{r eval=FALSE, include=FALSE}
+# 1. Open jpeg file
+jpeg("figures/TSNE_dim40_res0.54.jpg", width = 1052, height = 640)
+# Plot the UMAP
+# Plot the UMAP
+DimPlot(seurat_integrated,
+        reduction = "umap",
+        label = TRUE,
+        label.size = 6)
+# 3. Close the file
+dev.off()
+```
+
+```{r}
+# Assign identity of clusters
+Idents(object = seurat_integrated) <- "integrated_snn_res.0.18"
+```
+```{r}
+# Extract identity and sample information from seurat object to determine the number of cells per cluster per sample
+n_cells <- FetchData(seurat_integrated, 
+                     vars = c("ident", "seq_folder")) %>%
+        dplyr::count(ident, seq_folder) %>%
+        tidyr::spread(ident, n)
+
+# View table
+View(n_cells)
+write.csv(n_cells, file="data/cellsPerCluster_dim40_res0.18.csv")
+```
+
+```{r}
+# 1. Open jpeg file
+jpeg("figures/PerSampleTypeTSNE_dim40_res0.18.jpg", width = 1052, height = 640)
+# UMAP of cells in each cluster by sample
+DimPlot(seurat_integrated, 
+        label = TRUE, 
+        split.by = "sample")  + NoLegend()
+# 3. Close the file
+dev.off()
+```
+
+```{r eval=FALSE, include=FALSE}
+# 1. Open jpeg file
+jpeg("figures/Cells Per Cluster.jpg", width = 1052, height = 640)
+#2. Visualize Number oc cell per sample
+metadata %>% 
+  	ggplot(aes(x=sample, fill=sample)) + 
+  	geom_bar() +
+  	theme_classic() +
+  	theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  	theme(plot.title = element_text(hjust=0.5, face="bold")) +
+  	ggtitle("Number of Cells Per Sample")
+# 3. Close the file
+dev.off()
+ggplot(n_cells)+geom_bar(aes(x=y = seq_folder))
+```
+
+```{r}
+n_cells_2<-melt(n_cells)
+n_cells_2 <-n_cells_2 %>% 
+ dplyr::rename(
+ "Sample Type"= seq_folder,
+   "Cluster Number"= variable ,
+  "Cell Number"=value)
+```
+```{r}
+s <- ggplot(n_cells_2, aes( "Cluster Number",  "Cell Number",))
+s + geom_col()
+```
+
+```{r}
+DefaultAssay(seurat_integrated) <- "RNA"
+```
+```{r}
+# Create function to get conserved markers for any given cluster
+get_conserved <- function(cluster){
+  FindConservedMarkers(seurat_integrated,
+                       ident.1 = cluster,
+                       grouping.var = "sample",
+                       only.pos = TRUE) %>%
+    rownames_to_column(var = "gene") %>%
+    left_join(y = unique(annotations[, c("gene_name", "description")]),
+               by = c("gene" = "gene_name")) %>%
+    cbind(cluster_id = cluster, .)
+  }
+```
+```{r}
+remotes::install_github("satijalab/seurat", "seurat5", quiet = TRUE)
+```
+```{r}
+# Select the RNA counts slot to be the default assay
+DefaultAssay(seurat_integrated) <- "RNA"
+
+# Normalize RNA data for visualization purposes
+seurat_integrated <- NormalizeData(seurat_integrated, verbose = FALSE)
+```
+```{r}
+seurat_integrated <- JoinLayers(seurat_integrated)
+seurat_integrated
+```
+```{r}
+# Select the RNA counts slot to be the default assay
+DefaultAssay(seurat_integrated) <- "RNA"
+```
+
+```{r}
+# Create function to get conserved markers for any given cluster
+get_conserved <- function(cluster){
+  FindConservedMarkers(seurat_integrated,
+                       ident.1 = cluster,
+                       grouping.var = "sample",
+                       only.pos = TRUE) %>%
+    rownames_to_column(var = "gene") %>%
+    left_join(y = unique(annotations[, c("gene_name", "description")]),
+               by = c("gene" = "gene_name")) %>%
+    cbind(cluster_id = cluster, .)
+  }
+```
+```{r}
+# Connect to AnnotationHub
+ah <- AnnotationHub()
+
+# Access the Ensembl database for organism
+ahDb <- query(ah, 
+              pattern = c("Mus musculus", "EnsDb"), 
+              ignore.case = TRUE)
+
+# Acquire the latest annotation files
+id <- ahDb %>%
+        mcols() %>%
+        rownames() %>%
+        tail(n = 1)
+
+# Download the appropriate Ensembldb database
+edb <- ah[[id]]
+
+# Extract gene-level information from database
+annotations <- genes(edb, 
+                     return.type = "data.frame")
+
+# Select annotations of interest
+annotations <- annotations %>%
+        dplyr::select(gene_id, gene_name, seq_name, gene_biotype, description)
+```
+
+```{r}
+# Iterate function across desired clusters
+conserved_markers <- map_dfr(c(0:15), get_conserved)
+```
+```{r}
+# Extract top 10 markers per cluster
+top10 <- conserved_markers %>% 
+  mutate(avg_fc = (WT_avg_log2FC + KO_avg_log2FC+ Het_avg_log2FC) /3) %>% 
+  group_by(cluster_id) %>% 
+  top_n(n = 10, 
+        wt = avg_fc)
+```
+
+```{r}
+write.csv(top10, file="data/Top10ConservedMarkers.csv")
+```
+```{r}
+write.csv(conserved_markers, file="data/conserved_markers.csv")
+```
+
+

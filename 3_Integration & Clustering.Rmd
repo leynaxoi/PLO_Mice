@@ -1,0 +1,97 @@
+---
+title: "3_Integration & Clustering"
+output: html_document
+date: "2024-01-29"
+---
+
+###### 1. Setting up working directory
+
+```{r, setup, include=FALSE}
+knitr::opts_knit$set(root.dir ="/Users/leynaxoi/Documents/PLO Mice Run 2/Analysis 3" )
+```
+
+
+###### 2. Loading Libraries
+
+```{r}
+list.of.packages <- c("Seurat", "tidyverse","Matrix","scales","cowplot","RCurl","AnnotationHub","rtracklayer","GPseq","ensembldb")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages))
+  install.packages(new.packages)
+for(pkg in c("Seurat", "tidyverse","Matrix","scales","cowplot","RCurl","AnnotationHub","rtracklayer","GPseq","ensembldb")){
+  library(pkg, character.only = TRUE)
+}
+``` 
+
+###### 3. Loading Filtered Data 
+
+```{r}
+split_PLO <- readRDS("/Users/leynaxoi/Documents/PLO Mice Run 2/Analysis 3/data/split_PLO.rds")
+```
+
+###### 3. Loading Filtered Data 
+
+```{r}
+# Select the most variable features to use for integration
+integ_features <- SelectIntegrationFeatures(object.list = split_PLO, 
+                                            nfeatures = 3000) 
+```
+```{r}
+# Prepare the SCT list object for integration
+split_seurat <- PrepSCTIntegration(object.list = split_PLO, 
+                                   anchor.features = integ_features)
+```
+
+```{r}
+# Find best buddies - can take a while to run
+integ_anchors <- FindIntegrationAnchors(object.list = split_seurat, 
+                                        normalization.method = "SCT", 
+                                        anchor.features = integ_features)
+```
+
+```{r}
+# Integrate across conditions
+seurat_integrated <- IntegrateData(anchorset = integ_anchors, 
+                                   normalization.method = "SCT")
+```
+
+```{r}
+# Run PCA
+seurat_integrated <- RunPCA(object = seurat_integrated)
+```
+```{r}
+# Plot PCA
+PCAPlot(seurat_integrated,
+        split.by = "sample")  
+```
+
+```{r}
+# Set seed
+set.seed(32608)
+
+# Run UMAP
+seurat_integrated <- RunUMAP(seurat_integrated, 
+                             dims = 1:40,
+			     reduction = "pca")
+```
+```{r}
+# Plot UMAP                             
+DimPlot(object=seurat_integrated)      
+```
+```{r}
+# Plot UMAP split by sample
+DimPlot(seurat_integrated,
+        split.by = "sample")  
+```
+
+
+```{r}
+saveRDS(seurat_integrated, "results/integrated_seurat.rds")
+```
+
+```{r}
+# Plot the elbow plot
+ElbowPlot(object = seurat_integrated, 
+          ndims = 40)
+```
+

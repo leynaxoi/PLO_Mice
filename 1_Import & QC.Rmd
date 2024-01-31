@@ -1,0 +1,72 @@
+---
+title: "1 Import Cell Ranger to R"
+output: html_document
+date: "2024-01-29"
+---
+
+```{r}
+> #### Pre-Analysis Steps
+
+we are using the Filtered version for the feature/cell matrix because The filtered gene-barcode matrix excludes barcodes that correspond to this background noise (e.g. GEMs with free-floating mRNA from lysed or dead cells) ([Filtered vs Raw Matrix](https://kb.10xgenomics.com/hc/en-us/articles/360001892491-What-is-the-difference-between-the-filtered-and-raw-gene-barcode-matrix-)).
+
+```{r, setup, include=FALSE}
+knitr::opts_knit$set(root.dir ="/Users/leynaxoi/Documents/PLO Mice Run 2/Analysis 2" )
+```
+
+> #### Setting Up Seurat Object
+
+###### 1. Setting up working directory
+
+```{r}
+setwd("/Users/leynaxoi/Documents/PLO Mice Run 2/Analysis 2")
+getwd()
+```
+
+###### 2. Creating Folder (*Folder exist? Code will not generate another folder*)
+
+```{r}
+#creating an output folder the future data that gets generated 
+dir.create("data")
+dir.create("results")
+dir.create("figures")
+```
+
+###### 3a. Loading Libraries
+
+list.of.packages <- c("ggplot2", "Rcpp")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+
+```{r}
+library(Seurat)
+library(tidyverse)
+library(Matrix)
+library(scales)
+library(cowplot)
+library(RCurl)
+library(AnnotationHub)
+library(rtracklayer)
+library(GPseq)
+library(ensembldb)
+``` 
+
+###### 4. Load PLO Run 2 (Filtered Cell/Feature matrix)
+
+```{r}
+#WT
+WT <- Read10X(data.dir = "/Users/leynaxoi/Documents/PLO Mice Run 2/Raw Data /WT/filtered_feature_bc_matrix")
+#KO
+Het <- Read10X(data.dir = "/Users/leynaxoi/Documents/PLO Mice Run 2/Raw Data /Het/filtered_feature_bc_matrix")
+#KO
+KO <- Read10X(data.dir = "/Users/leynaxoi/Documents/PLO Mice Run 2/Raw Data /KO/filtered_feature_bc_matrix")
+```
+
+
+```{r}
+# Create a merged Seurat object
+PLO_Mice <- merge(x = WT, 
+                       y = c(Het,KO),
+                       add.cell.id = c("WT","Het","KO"))
+```
+
+
